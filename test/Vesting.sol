@@ -9,7 +9,10 @@ import "src/Vesting.sol";
 import "src/EZSwapToken.sol";
 
 contract TestContract is Test {
-    Vesting vesting;
+    Vesting vestingInvestorTeamAdvisorCommunity;
+    Vesting vestingTreasury;
+    Vesting vestingCommunity;
+
     EZSwap token;
 
     address owner = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
@@ -18,22 +21,36 @@ contract TestContract is Test {
     function setUp() public {
         vm.startPrank(owner);
         token = new EZSwap(owner);
-        vesting = new Vesting(address(token));
+
+        vestingInvestorTeamAdvisorCommunity = new Vesting(
+            address(token),
+            "InvestorTeamAdvisorCommunity_Lock",
+            180 days,
+            450_000_00 * 10 ** 18,
+            450_000_000 * 10 ** 18,
+            6
+        );
+
+        vestingTreasury = new Vesting(address(token), "Treasury_Lock", 365 days, 0, 100_000_000 * 10 ** 18, 8);
+
+        vestingCommunity = new Vesting(address(token), "Community_Lock", 180 days, 0, 310_000_000 * 10 ** 18, 8);
 
         token.setWhitelist(owner, true);
-        token.setWhitelist(address(vesting), true);
+        token.setWhitelist(address(vestingInvestorTeamAdvisorCommunity), true);
+        token.setWhitelist(address(vestingTreasury), true);
+        token.setWhitelist(address(vestingInvestorTeamAdvisorCommunity), true);
     }
 
     function testCreateLock() public {
         vm.startPrank(owner);
 
-        uint256 approveAmount = vesting.lockAmount();
-        token.approve(address(vesting), approveAmount);
+        uint256 approveAmount = vestingInvestorTeamAdvisorCommunity.totalLockAmount();
+        token.approve(address(vestingInvestorTeamAdvisorCommunity), approveAmount);
 
-        vesting.createLock();
-        assertEq(token.balanceOf(address(vesting)), approveAmount, "lock failed");
-        assertEq(vesting.startTime(), block.timestamp, "start time error");
-        assertTrue(vesting.created(), "created error");
+        vestingInvestorTeamAdvisorCommunity.createLock();
+        assertEq(token.balanceOf(address(vestingInvestorTeamAdvisorCommunity)), approveAmount, "lock failed");
+        assertEq(vestingInvestorTeamAdvisorCommunity.startTime(), block.timestamp, "start time error");
+        assertTrue(vestingInvestorTeamAdvisorCommunity.created(), "created error");
     }
 
     function testFailCreateLockTwice() public {
@@ -43,78 +60,89 @@ contract TestContract is Test {
 
     function testFailCreateLockNotOwner() public {
         vm.startPrank(user);
-        uint256 approveAmount = vesting.lockAmount();
-        token.approve(address(vesting), approveAmount);
-        vesting.createLock();
+        uint256 approveAmount = vestingInvestorTeamAdvisorCommunity.totalLockAmount();
+        token.approve(address(vestingInvestorTeamAdvisorCommunity), approveAmount);
+        vestingInvestorTeamAdvisorCommunity.createLock();
     }
 
-    function testClaim() public {
+    function testClaimCliff() public {
         testCreateLock();
         vm.startPrank(owner);
 
-        uint256 interval = 90 * 24 * 60 * 60;
-        for (uint256 i = 0; i < vesting.maxClaimCount(); i++) {
+        uint256 cliffInterval = vestingInvestorTeamAdvisorCommunity.cliffInterval();
+        vm.warp(block.timestamp + cliffInterval);
+
+        uint256 ownerBalanceBefore = token.balanceOf(owner);
+        vestingInvestorTeamAdvisorCommunity.claimCliff();
+        uint256 ownerBalanceAfter = token.balanceOf(owner);
+
+        assertEq(
+            ownerBalanceAfter - ownerBalanceBefore,
+            vestingInvestorTeamAdvisorCommunity.cliffAmount(),
+            "perAmountClaim error"
+        );
+        assertTrue(vestingInvestorTeamAdvisorCommunity.cliffEnded(), "cliffEnded error");
+    }
+
+    function testClaimVesting() public {
+        testClaimCliff();
+        vm.startPrank(owner);
+
+        uint256 vestingInterval = vestingInvestorTeamAdvisorCommunity.vestingInterval();
+
+        for (uint256 i = 0; i < vestingInvestorTeamAdvisorCommunity.maxClaimVestingCount(); i++) {
             uint256 ownerBalanceBefore = token.balanceOf(owner);
-            vm.warp(block.timestamp + (i + 1) * interval);
-            vesting.claim();
+            vm.warp(block.timestamp + (i + 1) * vestingInterval);
+            vestingInvestorTeamAdvisorCommunity.claimVesting();
             uint256 ownerBalanceAfter = token.balanceOf(owner);
-            assertEq(ownerBalanceAfter - ownerBalanceBefore, vesting.perAmountClaim(), "perAmountClaim error");
-            assertEq(i+1, vesting.count(), "count error");
+            assertEq(
+                ownerBalanceAfter - ownerBalanceBefore,
+                vestingInvestorTeamAdvisorCommunity.vestingAmountPerClaim(),
+                "perAmountClaim error"
+            );
+            assertEq(i + 1, vestingInvestorTeamAdvisorCommunity.claimVestingCount(), "count error");
         }
 
-        assertTrue(vesting.vestingEnded(), "vestingEnded error");
-        assertEq(token.balanceOf(address(vesting)), 0, "vesting token balance error");
+        assertTrue(vestingInvestorTeamAdvisorCommunity.vestingEnded(), "vestingEnded error");
+        assertEq(token.balanceOf(address(vestingInvestorTeamAdvisorCommunity)), 0, "vesting token balance error");
     }
 
     function testFailClaimErrorOwner() public {
         testCreateLock();
         vm.startPrank(user);
 
-        uint256 interval = 90 * 24 * 60 * 60;
-        vm.warp(block.timestamp + interval);
-        vesting.claim();
+        uint256 cliffInterval = vestingInvestorTeamAdvisorCommunity.cliffInterval();
+
+        vm.warp(block.timestamp + cliffInterval);
+        vestingInvestorTeamAdvisorCommunity.claimCliff();
     }
 
     function testFailClaimErrorTime() public {
         testCreateLock();
         vm.startPrank(owner);
 
-        uint256 interval = 90 * 24 * 60 * 60 - 1;
-        vm.warp(block.timestamp + interval);
-        vesting.claim();
-    }
+        uint256 errorCliffInterval = vestingInvestorTeamAdvisorCommunity.cliffInterval() - 1;
 
-    function testFailClaimErrorCount() public {
-        testCreateLock();
-        vm.startPrank(owner);
-
-        uint256 interval = 90 * 24 * 60 * 60;
-
-        for (uint256 i = 0; i <= vesting.maxClaimCount(); i++) {
-            uint256 ownerBalanceBefore = token.balanceOf(owner);
-            vm.warp(block.timestamp + (i + 1) * interval);
-            vesting.claim();
-            uint256 ownerBalanceAfter = token.balanceOf(owner);
-            assertEq(ownerBalanceAfter - ownerBalanceBefore, vesting.perAmountClaim(), "perAmountClaim error");
-        }
+        vm.warp(block.timestamp + errorCliffInterval);
+        vestingInvestorTeamAdvisorCommunity.claimCliff();
     }
 
     function testOwnerCall() public {
-        testClaim();
+        testClaimVesting();
 
         vm.startPrank(owner);
         uint256 lostBalance = 10000;
-        token.transfer(address(vesting), lostBalance);
+        token.transfer(address(vestingInvestorTeamAdvisorCommunity), lostBalance);
 
         uint256 ownerBalanceBeforeCall = token.balanceOf(address(owner));
 
-        assertEq(token.balanceOf(address(vesting)), lostBalance, "wrong balance");
+        assertEq(token.balanceOf(address(vestingInvestorTeamAdvisorCommunity)), lostBalance, "wrong balance");
         bytes memory data = abi.encodeWithSignature("transfer(address,uint256)", address(owner), lostBalance);
-        vesting.ownerCall(address(token), data);
+        vestingInvestorTeamAdvisorCommunity.ownerCall(address(token), data);
 
         uint256 ownerBalanceAfterCall = token.balanceOf(address(owner));
 
-        assertEq(token.balanceOf(address(vesting)), 0, "wrong balance");
+        assertEq(token.balanceOf(address(vestingInvestorTeamAdvisorCommunity)), 0, "wrong balance");
         assertEq(ownerBalanceAfterCall - ownerBalanceBeforeCall, lostBalance, "wrong balance");
     }
 
@@ -122,15 +150,11 @@ contract TestContract is Test {
         testCreateLock();
         vm.startPrank(owner);
 
-        uint256 interval = 90 * 24 * 60 * 60;
-        vm.warp(block.timestamp + interval);
-        vesting.claim();
-
         uint256 lostBalance = 10000;
-        token.transfer(address(vesting), lostBalance);
+        token.transfer(address(vestingInvestorTeamAdvisorCommunity), lostBalance);
 
-        assertEq(token.balanceOf(address(vesting)), lostBalance, "wrong balance");
+        assertEq(token.balanceOf(address(vestingInvestorTeamAdvisorCommunity)), lostBalance, "wrong balance");
         bytes memory data = abi.encodeWithSignature("transfer(address,uint256)", address(owner), lostBalance);
-        vesting.ownerCall(address(token), data);
+        vestingInvestorTeamAdvisorCommunity.ownerCall(address(token), data);
     }
 }

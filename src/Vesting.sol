@@ -8,56 +8,100 @@ import "solmate/auth/Owned.sol";
 contract Vesting is Owned {
     using SafeTransferLib for ERC20;
 
-    ERC20 immutable VESTING_TOKEN;
+    ERC20 immutable VESTING_TOKEN; // vesting token
+    string public NAME; // vesting name
 
-    uint256 constant interval = 90 days; // claim interval
-    uint256 public constant lockAmount = 10000 * 10 ** 18; // total lock amount
-    uint256 public constant perAmountClaim = 1000 * 10 ** 18; // per amount claim
-    uint256 public constant maxClaimCount = lockAmount / perAmountClaim; // max claim count
+    uint256 public cliffInterval; // cliff interval
+    uint256 public vestingInterval = 90 days; // vesting interval
+
+    uint256 public totalLockAmount; // total lock amount
+    uint256 public cliffAmount; // cliff amount
+    uint256 public vestingAmount; // vesting amount
+    uint256 public vestingAmountPerClaim; // vesting amount per claim
+
     uint256 public startTime; // lock start time
-    uint256 public count; // claim count
-
     bool public created; // if create lock
+    bool public cliffEnded; // if cliff ended
     bool public vestingEnded; // if vesting ended
 
-    event Claimed(uint256 indexed count, address claimer, uint256 amount);
-    event VestingStart(uint256 indexed startTime);
+    uint256 public maxClaimVestingCount; // owner max claim vesting count
+    uint256 public claimVestingCount; // owner claim count
+
+    event Claimed(address claimer, uint256 amount);
+    event VestingAndCliffStart(uint256 indexed startTime);
+    event CliffEnded();
     event VestingEnded();
 
-    constructor(address _token) Owned(msg.sender) {
+    constructor(
+        address _token,
+        string memory _name,
+        uint256 _cliffInterval,
+        uint256 _cliffAmount,
+        uint256 _totalLockAmount,
+        uint256 _maxClaimVestingCount
+    ) Owned(msg.sender) {
         VESTING_TOKEN = ERC20(_token);
+        NAME = _name;
+        cliffAmount = _cliffAmount;
+        cliffInterval = _cliffInterval;
+        totalLockAmount = _totalLockAmount;
+        maxClaimVestingCount = _maxClaimVestingCount;
+
+        vestingAmount = totalLockAmount - cliffAmount;
+        vestingAmountPerClaim = vestingAmount / maxClaimVestingCount;
     }
 
     // owner creates a lock position only once
     function createLock() external onlyOwner {
         require(!created, "Lock has been created");
-        require(!vestingEnded, "Vesting already ended");
-        VESTING_TOKEN.safeTransferFrom(msg.sender, address(this), lockAmount);
+        VESTING_TOKEN.safeTransferFrom(msg.sender, address(this), totalLockAmount);
+
         startTime = block.timestamp;
         created = true;
 
-        emit VestingStart(startTime);
+        emit VestingAndCliffStart(startTime);
     }
 
-    // owner claims tokens after unlocking at interval
-    function claim() external onlyOwner {
+    // owner claims cliff tokens after unlocking at interval
+    function claimCliff() external onlyOwner {
+        require(created, "Lock hasn't been created");
+        require(!cliffEnded, "Cliff already ended");
+        require(block.timestamp >= startTime + cliffInterval, "Claim not yet available");
+
+        if (cliffAmount != 0) {
+            VESTING_TOKEN.safeTransfer(msg.sender, cliffAmount);
+        }
+        cliffEnded = true;
+
+        emit Claimed(msg.sender, cliffAmount);
+        emit CliffEnded();
+    }
+
+    // owner claims vesting tokens after unlocking at interval
+    function claimVesting() external onlyOwner {
+        require(cliffEnded, "Cliff hasn't ended");
         require(!vestingEnded, "Vesting already ended");
-        require(block.timestamp >= startTime + (count + 1) * interval, "Claim not yet available");
-        require(count < maxClaimCount, "All tokens have been claimed");
 
-        count += 1;
-        VESTING_TOKEN.safeTransfer(msg.sender, perAmountClaim);
-        emit Claimed(count, msg.sender, perAmountClaim);
+        require(
+            block.timestamp >= startTime + cliffInterval + (claimVestingCount + 1) * vestingInterval,
+            "Claim not yet available"
+        );
+        require(claimVestingCount < maxClaimVestingCount, "All tokens have been claimed");
 
-        if (count == maxClaimCount) {
+        claimVestingCount += 1;
+        VESTING_TOKEN.safeTransfer(msg.sender, vestingAmountPerClaim);
+
+        emit Claimed(msg.sender, vestingAmountPerClaim);
+
+        if (claimVestingCount == maxClaimVestingCount) {
             vestingEnded = true;
             emit VestingEnded();
         }
     }
 
-    // This function can only be called after the end of vesting, and is mainly used for unexpected recovery
+    // This function can only be called after the end of cliff and vesting, and is mainly used for unexpected recovery
     function ownerCall(address target, bytes calldata data) external onlyOwner {
-        require(vestingEnded, "Vesting has not ended yet");
+        require(vestingEnded && cliffEnded, "Cliff and vesting have not ended yet");
         (bool success,) = target.call(data);
         require(success, "External call failed");
     }
