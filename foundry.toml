@@ -1,2 +1,12 @@
 [profile.ci.fuzz]
 runs = 10_000
+
+
+[rpc_endpoints]
+manta = "https://pacific-rpc.manta.network/http"
+mantatest = "https://pacific-rpc.testnet.manta.network/http"
+
+[etherscan]
+manta = { key = "" }
+mantatest = { key = "" }
+
