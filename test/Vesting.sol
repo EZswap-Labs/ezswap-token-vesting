@@ -13,14 +13,14 @@ contract TestContract is Test {
     Vesting vestingTreasury;
     Vesting vestingCommunity;
 
-    EZSwap token;
+    EZSWAP token;
 
     address owner = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
     address user = 0xEeb6C7B10F2c0d259D21eB9cc5d37664bb123602;
 
     function setUp() public {
         vm.startPrank(owner);
-        token = new EZSwap(owner);
+        token = new EZSWAP(owner);
 
         vestingInvestorTeamAdvisorCommunity = new Vesting(
             address(token),
@@ -37,10 +37,11 @@ contract TestContract is Test {
         vestingCommunity =
             new Vesting(address(token), "CommunityAirdrop_Lock", 180 days, 90 days, 0, 385_000_000 * 10 ** 18, 8);
 
-        token.setWhitelist(owner, true);
-        token.setWhitelist(address(vestingInvestorTeamAdvisorCommunity), true);
-        token.setWhitelist(address(vestingTreasury), true);
-        token.setWhitelist(address(vestingInvestorTeamAdvisorCommunity), true);
+        token.transfer(user, 0);
+        // token.setWhitelist(owner, true);
+        // token.setWhitelist(address(vestingInvestorTeamAdvisorCommunity), true);
+        // token.setWhitelist(address(vestingTreasury), true);
+        // token.setWhitelist(address(vestingInvestorTeamAdvisorCommunity), true);
     }
 
     function testCreateLock() public {
