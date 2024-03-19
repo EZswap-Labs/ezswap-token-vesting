@@ -8,3 +8,13 @@ This is vesting comtract for ezswap token, targeted for linear unlocking, once `
 forge build
 forge test
 ```
+
+```
+forge script script/Vesting.s.sol:MyScript --rpc-url https://pacific-rpc.testnet.manta.network/http --broadcast --verify -vvvv 
+
+forge script script/Vesting.s.sol:MyScript --rpc-url https://pacific-rpc.testnet.manta.network/http --verify --resume
+
+forge script script/Stake.s.sol:MyScript --rpc-url https://pacific-rpc.sepolia-testnet.manta.network/http --broadcast --verify -vvvv 
+
+forge script script/Stake.s.sol:MyScript --rpc-url https://pacific-rpc.sepolia-testnet.manta.network/http --verify --resume
+```

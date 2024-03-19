@@ -26,14 +26,16 @@ contract TestContract is Test {
             address(token),
             "InvestorTeamAdvisorCommunity_Lock",
             180 days,
+            90 days,
             450_000_00 * 10 ** 18,
             450_000_000 * 10 ** 18,
             6
         );
 
-        vestingTreasury = new Vesting(address(token), "Treasury_Lock", 365 days, 0, 100_000_000 * 10 ** 18, 8);
+        vestingTreasury = new Vesting(address(token), "Treasury_Lock", 365 days, 90 days, 0, 100_000_000 * 10 ** 18, 8);
 
-        vestingCommunity = new Vesting(address(token), "Community_Lock", 180 days, 0, 310_000_000 * 10 ** 18, 8);
+        vestingCommunity =
+            new Vesting(address(token), "CommunityAirdrop_Lock", 180 days, 90 days, 0, 385_000_000 * 10 ** 18, 8);
 
         token.setWhitelist(owner, true);
         token.setWhitelist(address(vestingInvestorTeamAdvisorCommunity), true);

@@ -12,7 +12,7 @@ contract Vesting is Owned {
     string public NAME; // vesting name
 
     uint256 public cliffInterval; // cliff interval
-    uint256 public vestingInterval = 90 days; // vesting interval
+    uint256 public vestingInterval; // vesting interval
 
     uint256 public totalLockAmount; // total lock amount
     uint256 public cliffAmount; // cliff amount
@@ -36,6 +36,7 @@ contract Vesting is Owned {
         address _token,
         string memory _name,
         uint256 _cliffInterval,
+        uint256 _vestingInterval,
         uint256 _cliffAmount,
         uint256 _totalLockAmount,
         uint256 _maxClaimVestingCount
@@ -44,6 +45,7 @@ contract Vesting is Owned {
         NAME = _name;
         cliffAmount = _cliffAmount;
         cliffInterval = _cliffInterval;
+        vestingInterval = _vestingInterval;
         totalLockAmount = _totalLockAmount;
         maxClaimVestingCount = _maxClaimVestingCount;
 
